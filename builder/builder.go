@@ -68,7 +68,7 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 			}()))
 			builder.WriteString("\n")
 		}
-		builder.WriteString(" apt-get clean && rm -rf /var/lib/apt/lists/*\n")
+		builder.WriteString(" && apt-get clean && rm -rf /var/lib/apt/lists/*\n")
 		builder.WriteString("\n")
 	}
 
