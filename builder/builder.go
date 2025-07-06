@@ -59,16 +59,10 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	// Install dependencies if any
 	if len(config.Dependencies) > 0 {
 		builder.WriteString("RUN apt-get update && apt-get install -y \\\n")
-		for i, dep := range config.Dependencies {
-			builder.WriteString(fmt.Sprintf("    %s%s", dep, func() string {
-				if i < len(config.Dependencies)-1 {
-					return " \\"
-				}
-				return ""
-			}()))
-			builder.WriteString("\n")
+		for _, dep := range config.Dependencies {
+			builder.WriteString(fmt.Sprintf("    %s \\ \n", dep))
 		}
-		builder.WriteString(" && apt-get clean && rm -rf /var/lib/apt/lists/*\n")
+		builder.WriteString("    && apt-get clean && rm -rf /var/lib/apt/lists/*\n")
 		builder.WriteString("\n")
 	}
 
