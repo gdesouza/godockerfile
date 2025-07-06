@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gdesouza/godockerfile/types"
+	"github.com/gdesouza/godockerfile/dockerfile"
 )
 
 func main() {
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// Instantiate DockerfileConfig
-	config := types.DockerfileConfig{
+	config := dockerfile.DockerfileConfig{
 		BaseImage:      *baseImage,
 		AppPort:        *appPort,
 		Dependencies:   dependencies,

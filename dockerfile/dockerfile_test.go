@@ -1,5 +1,5 @@
 
-package types
+package dockerfile
 
 import (
 	"strings"
