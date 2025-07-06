@@ -81,7 +81,7 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	// Copy application files
 	if len(config.CopyFiles) > 0 {
 		for _, file := range config.CopyFiles {
-			builder.WriteString(fmt.Sprintf("COPY %s .\n", file))
+			builder.WriteString(fmt.Sprintf("COPY %s %s\n", file.Origin, file.Destination))
 		}
 		builder.WriteString("\n")
 	} else {
