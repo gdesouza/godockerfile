@@ -56,12 +56,6 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	builder.WriteString(fmt.Sprintf("FROM %s\n", config.BaseImage))
 	builder.WriteString("\n") // Add a newline for readability
 
-	// Set user if provided
-	if config.User != "" {
-		builder.WriteString(fmt.Sprintf("USER %s\n", config.User))
-		builder.WriteString("\n")
-	}
-
 	// Install dependencies if any
 	if len(config.Dependencies) > 0 {
 		builder.WriteString("RUN apt-get update && apt-get install -y \\\n")
@@ -75,6 +69,20 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 			builder.WriteString("\n")
 		}
 		builder.WriteString("    && rm -rf /var/lib/apt/lists/*\n")
+		builder.WriteString("\n")
+	}
+
+	// Run pre-commands if any
+	if len(config.PreRunCommands) > 0 {
+		for _, cmd := range config.PreRunCommands {
+			builder.WriteString(fmt.Sprintf("RUN %s\n", cmd))
+		}
+		builder.WriteString("\n")
+	}
+
+	// Set user if provided
+	if config.User != "" {
+		builder.WriteString(fmt.Sprintf("USER %s\n", config.User))
 		builder.WriteString("\n")
 	}
 
@@ -93,14 +101,6 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	// Build command
 	if config.BuildCommand != "" {
 		builder.WriteString(fmt.Sprintf("RUN %s\n", config.BuildCommand))
-		builder.WriteString("\n")
-	}
-
-	// Run pre-commands if any
-	if len(config.PreRunCommands) > 0 {
-		for _, cmd := range config.PreRunCommands {
-			builder.WriteString(fmt.Sprintf("RUN %s\n", cmd))
-		}
 		builder.WriteString("\n")
 	}
 
