@@ -1,2 +1,2 @@
 # godockerfile
-godockerfile is a Dockerfile builder. 
+godockerfile is a Dockerfile builder.
