@@ -1,57 +1,91 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gdesouza/godockerfile/types"
 )
 
 func main() {
-	// example usage of the Dockerfile generation function
-	rootRepoPath := "/path/to/your/root/repo" // Replace with your actual root repo path
-	dockerfileName := "Dockerfile"
-	outputFilePath := filepath.Join(rootRepoPath, dockerfileName)
+	// Command-line flags for all primitive DockerfileConfig fields
+	baseImage := flag.String("base", "", "Base image for the Dockerfile (required)")
+	appPort := flag.Int("port", 0, "Port to expose (optional)")
+	deps := flag.String("deps", "", "Comma-separated list of dependencies (optional)")
+	buildCmd := flag.String("build", "", "Build command (optional)")
+	preRun := flag.String("prerun", "", "Comma-separated list of pre-run commands (optional)")
+	runCmd := flag.String("run", "", "Run command (optional)")
+	entrypoint := flag.String("entrypoint", "", "Entrypoint for the container (optional)")
+	workspace := flag.String("workspace", "", "Workspace directory (optional)")
+	exposePort := flag.Bool("expose", false, "Expose the application port (optional)")
+	user := flag.String("user", "", "User to run the application as (optional)")
+	outputDir := flag.String("out", ".", "Output directory for the Dockerfile (optional)")
 
-	dockerfileConfig := types.DockerfileConfig{
-		BaseImage:      "ubuntu:20.04",
-		AppPort:        8080,
-		Dependencies:   []string{"git", "curl"},
-		CopyFiles:      []types.CopyInstruction{{Origin: "main.go", Destination: "/app/main.go"}},
-		BuildCommand:   "go build -o app .",
-		PreRunCommands: []string{"chmod +x ./app"},
-		RunCommand:     "./app",
-		Entrypoint:     "/bin/sh -c",
-		Workspace:      "/app",
-		ExposePort:     true,
-		User:           "nonroot", // Example user
+	flag.Parse()
+
+	// Validate required parameter
+	if *baseImage == "" {
+		fmt.Fprintln(os.Stderr, "Error: --base is required")
+		os.Exit(1)
 	}
 
-	// add dependencies and copy files
-	dockerfileConfig.AddDependency("ros-noetic-ros-base")
-	dockerfileConfig.AddCopyFile(types.CopyInstruction{
-		Origin:      "config.file",
-		Destination: "config.file",
-	})
+	// Parse comma-separated lists
+	var dependencies []string
+	if *deps != "" {
+		for _, dep := range strings.Split(*deps, ",") {
+			trimmed := strings.TrimSpace(dep)
+			if trimmed != "" {
+				dependencies = append(dependencies, trimmed)
+			}
+		}
+	}
 
-	// add pre-run commands
-	dockerfileConfig.AddPreRunCommand("groupadd --gid 1000 mygroup")
-	dockerfileConfig.AddPreRunCommand("useradd --uid 1000 --gid 1000 myuser")
+	var preRunCommands []string
+	if *preRun != "" {
+		for _, cmd := range strings.Split(*preRun, ",") {
+			trimmed := strings.TrimSpace(cmd)
+			if trimmed != "" {
+				preRunCommands = append(preRunCommands, trimmed)
+			}
+		}
+	}
 
-	// generate the Dockerfile content
-	dockerfileContent, err := dockerfileConfig.GenerateDockerfileContent()
+	// Instantiate DockerfileConfig
+	config := types.DockerfileConfig{
+		BaseImage:      *baseImage,
+		AppPort:        *appPort,
+		Dependencies:   dependencies,
+		BuildCommand:   *buildCmd,
+		PreRunCommands: preRunCommands,
+		RunCommand:     *runCmd,
+		Entrypoint:     *entrypoint,
+		Workspace:      *workspace,
+		ExposePort:     *exposePort,
+		User:           *user,
+	}
+
+	// Generate Dockerfile content
+	content, err := config.GenerateDockerfileContent()
 	if err != nil {
-		fmt.Printf("Error generating Dockerfile content: %v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "Error generating Dockerfile: %v\n", err)
+		os.Exit(1)
 	}
 
-	// write the Dockerfile content to the output file
-	if err := os.WriteFile(outputFilePath, []byte(dockerfileContent), 0644); err != nil {
-		fmt.Printf("Error writing Dockerfile to %s: %v\n", outputFilePath, err)
-		return
+	// Ensure output directory exists
+	if err := os.MkdirAll(*outputDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
+		os.Exit(1)
 	}
 
-	// print success message
-	fmt.Printf("Dockerfile generated successfully at %s\n", outputFilePath)
+	// Write Dockerfile
+	outPath := filepath.Join(*outputDir, "Dockerfile")
+	if err := os.WriteFile(outPath, []byte(content), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing Dockerfile: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Dockerfile generated at %s\n", outPath)
 }
