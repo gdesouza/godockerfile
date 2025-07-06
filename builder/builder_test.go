@@ -1,5 +1,4 @@
-
-package dockerfile
+package Builder
 
 import (
 	"strings"
