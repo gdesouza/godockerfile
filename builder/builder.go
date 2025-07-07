@@ -5,6 +5,34 @@ import (
 	"strings"
 )
 
+// create an enum for the docker commands RUN, COPY, ADD, etc.
+type DockerCmdType string
+
+const (
+	FROM        DockerCmdType = "FROM"
+	RUN         DockerCmdType = "RUN"
+	COPY        DockerCmdType = "COPY"
+	ADD         DockerCmdType = "ADD"
+	WORKDIR     DockerCmdType = "WORKDIR"
+	EXPOSE      DockerCmdType = "EXPOSE"
+	USER        DockerCmdType = "USER"
+	ENTRYPOINT  DockerCmdType = "ENTRYPOINT"
+	CMD         DockerCmdType = "CMD"
+	VOLUME      DockerCmdType = "VOLUME"
+	ARG         DockerCmdType = "ARG"
+	LABEL       DockerCmdType = "LABEL"
+	ENV         DockerCmdType = "ENV"
+	HEALTHCHECK DockerCmdType = "HEALTHCHECK"
+	MAINTAINER  DockerCmdType = "MAINTAINER"
+	STOP_SIGNAL DockerCmdType = "STOPSIGNAL"
+)
+
+type DockerCmd struct {
+	Type    DockerCmdType // The type of Docker command (e.g., RUN, COPY)
+	Command string        // The command to execute (e.g., "apt-get update && apt-get install -y curl")
+	Args    []string      // Additional arguments for the command, if any
+}
+
 // CopyInstruction represents a single COPY instruction in a Dockerfile,
 // specifying the source path (Origin) and the destination path (Destination)
 // within the Docker image.
@@ -15,17 +43,18 @@ type CopyInstruction struct {
 
 // DockerfileConfig holds the configuration parameters for generating the Dockerfile.
 type DockerfileConfig struct {
-	BaseImage      string
-	AppPort        int
-	Dependencies   []string          // e.g., "git", "curl"
-	CopyFiles      []CopyInstruction // e.g., "main.go", "go.mod", "go.sum"
-	BuildCommand   string            // e.g., "go build -o app ."
-	PreRunCommands []string          // List of commands to run before the main CMD, e.g., "chmod +x ./app"
-	RunCommand     string            // e.g., "./app"
-	Entrypoint     string            // e.g., "/bin/sh -c"
-	Workspace      string            // Directory where the application will run, e.g., "/app"
-	ExposePort     bool
-	User           string // New: User to run the application as, e.g., "nonroot" or "appuser"
+	BaseImage         string
+	AppPort           int
+	Dependencies      []string          // e.g., "git", "curl"
+	CopyFiles         []CopyInstruction // e.g., "main.go", "go.mod", "go.sum"
+	BuildCommand      string            // e.g., "go build -o app ."
+	PreRunCommands    []string          // List of commands to run before the main CMD, e.g., "chmod +x ./app"
+	RunCommand        string            // e.g., "./app"
+	Entrypoint        string            // e.g., "/bin/sh -c"
+	Workspace         string            // Directory where the application will run, e.g., "/app"
+	ExposePort        bool
+	User              string      // New: User to run the application as, e.g., "nonroot" or "appuser"
+	OrderedDockerCmds []DockerCmd // List of generic Docker commands to include in the Dockerfile
 }
 
 // AddPreRunCommand appends a new command to the PreRunCommands list.
@@ -41,6 +70,11 @@ func (config *DockerfileConfig) AddCopyFile(files CopyInstruction) {
 // AddDependency appends a new dependency to the Dependencies list.
 func (config *DockerfileConfig) AddDependency(dependency string) {
 	config.Dependencies = append(config.Dependencies, dependency)
+}
+
+// AddOrderedDockerCmd appends a new generic Docker command to the OrderedDockerCmds list.
+func (config *DockerfileConfig) AddOrderedDockerCmd(cmd DockerCmd) {
+	config.OrderedDockerCmds = append(config.OrderedDockerCmds, cmd)
 }
 
 // GenerateDockerfileContent creates the content of a Dockerfile as a string
@@ -92,6 +126,18 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 		builder.WriteString("\n")
 	}
 
+	// Add ordered Docker commands if any
+	if len(config.OrderedDockerCmds) > 0 {
+		for _, cmd := range config.OrderedDockerCmds {
+			line, err := formatDockerCmd(cmd)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(line)
+			builder.WriteString("\n")
+		}
+	}
+
 	// Build command
 	if config.BuildCommand != "" {
 		builder.WriteString(fmt.Sprintf("RUN %s\n", config.BuildCommand))
@@ -114,4 +160,43 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+func formatDockerCmd(cmd DockerCmd) (string, error) {
+	switch cmd.Type {
+	case RUN, WORKDIR, USER, MAINTAINER:
+		return fmt.Sprintf("%s %s\n", cmd.Type, cmd.Command), nil
+	case COPY, ADD:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("%s %s %s\n", cmd.Type, cmd.Command, strings.Join(cmd.Args, " ")), nil
+		}
+		return fmt.Sprintf("%s %s\n", cmd.Type, cmd.Command), nil
+	case EXPOSE, STOP_SIGNAL:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("%s %s\n", cmd.Type, strings.Join(cmd.Args, " ")), nil
+		}
+		return fmt.Sprintf("%s %s\n", cmd.Type, cmd.Command), nil
+	case ENTRYPOINT, CMD:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("%s [\"%s\", \"%s\"]\n", cmd.Type, cmd.Command, strings.Join(cmd.Args, "\", \"")), nil
+		}
+		return fmt.Sprintf("%s [\"%s\"]\n", cmd.Type, cmd.Command), nil
+	case VOLUME:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("VOLUME [\"%s\"]\n", strings.Join(cmd.Args, "\", \"")), nil
+		}
+		return fmt.Sprintf("VOLUME [\"%s\"]\n", cmd.Command), nil
+	case ARG, LABEL, ENV:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("%s %s=%s\n", cmd.Type, cmd.Command, strings.Join(cmd.Args, " ")), nil
+		}
+		return fmt.Sprintf("%s %s\n", cmd.Type, cmd.Command), nil
+	case HEALTHCHECK:
+		if len(cmd.Args) > 0 {
+			return fmt.Sprintf("HEALTHCHECK CMD %s\n", strings.Join(cmd.Args, " ")), nil
+		}
+		return fmt.Sprintf("HEALTHCHECK CMD %s\n", cmd.Command), nil
+	default:
+		return "", fmt.Errorf("unknown Docker command type: %s", cmd.Type)
+	}
 }
