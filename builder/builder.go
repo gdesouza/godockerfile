@@ -105,7 +105,7 @@ func (config *DockerfileConfig) GenerateDockerfileContent() (string, error) {
 	}
 
 	// Set working directory
-	builder.WriteString("WORKDIR /app\n")
+	builder.WriteString(fmt.Sprintf("WORKDIR %s\n", config.Workspace))
 	builder.WriteString("\n")
 
 	// Define the entrypoint/command to run the application
